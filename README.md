@@ -60,6 +60,10 @@ Batch preparation skips articles that already have all three summaries for the
 current `OPENAI_MODEL` and `PROMPT_VERSION`. Use `--include-completed` to force a
 regeneration batch.
 
+Large runs are split into multiple Batch files by default so each uploaded JSONL
+stays under `--max-batch-file-mb 80` and each submitted Batch stays below
+`--max-batch-input-tokens 1500000`.
+
 Configuration is environment based. Edit `.env` directly for local settings.
 
 `OPENAI_MAX_SOURCE_CHARS` controls how much parsed SEP article text is included
@@ -69,12 +73,14 @@ limits and pilot-cost testing.
 
 `estimate-cost` uses cached crawled articles, the actual prompt builder, a
 simple character-based token estimate, and configurable per-million-token prices.
-Update the price flags if your model or OpenAI pricing changes:
+Defaults are set for the long-context `gpt-5.6-luna` prices you provided:
+`$1.00 / 1M input tokens` and `$4.50 / 1M output tokens`. Update the price flags
+if your model or OpenAI pricing changes:
 
 ```bash
 phil-encyclopedia estimate-cost --urls data/discovered_urls.json \
-  --input-cost-per-million 0.375 \
-  --output-cost-per-million 2.25
+  --input-cost-per-million 1.00 \
+  --output-cost-per-million 4.50
 ```
 
 ## Safety Gates

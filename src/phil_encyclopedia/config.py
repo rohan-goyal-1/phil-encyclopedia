@@ -24,7 +24,7 @@ class Settings:
         return cls(
             database_url=os.getenv("DATABASE_URL", "postgresql://localhost/phil_encyclopedia"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
-            openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1"),
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-5.6-luna"),
             openai_batch_completion_window=os.getenv("OPENAI_BATCH_COMPLETION_WINDOW", "24h"),
             openai_max_source_chars=int(os.getenv("OPENAI_MAX_SOURCE_CHARS", "220000")),
             sep_user_agent=os.getenv(

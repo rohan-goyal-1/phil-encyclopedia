@@ -87,6 +87,11 @@ def retrieve_batch(batch_id: str) -> object:
     return client.batches.retrieve(batch_id)
 
 
+def cancel_batch(batch_id: str) -> object:
+    client = OpenAI()
+    return client.batches.cancel(batch_id)
+
+
 def download_batch_files(batch_id: str, output_path: Path, errors_path: Path | None = None) -> object:
     client = OpenAI()
     batch = client.batches.retrieve(batch_id)
@@ -110,6 +115,8 @@ def download_batch_files(batch_id: str, output_path: Path, errors_path: Path | N
             f"Batch {batch_id} is {batch.status}; no output file is available yet. "
             "Run batch-status again later, then download-batch after it completes."
         )
+    if getattr(batch, "status", None) == "failed":
+        raise RuntimeError(f"Batch {batch_id} failed during validation or processing: {batch.errors}")
     if getattr(batch, "status", None) == "completed":
         raise RuntimeError(f"Batch {batch_id} completed but did not include an output file.")
     return batch
@@ -120,10 +127,13 @@ def wait_for_batch(batch_id: str, poll_interval_seconds: int = 30, timeout_secon
     while True:
         batch = retrieve_batch(batch_id)
         status = getattr(batch, "status", None)
-        print(f"Batch {batch_id} status: {status}", flush=True)
+        elapsed = int(time.monotonic() - started_at)
+        print(f"\rBatch {batch_id} status: {status} ({elapsed}s elapsed)", end="", flush=True)
         if status in {"completed", "failed", "expired", "cancelled"}:
+            print()
             return batch
         if time.monotonic() - started_at > timeout_seconds:
+            print()
             raise TimeoutError(f"Timed out waiting for batch {batch_id}; latest status was {status}")
         time.sleep(poll_interval_seconds)
 
