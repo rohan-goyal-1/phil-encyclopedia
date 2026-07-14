@@ -108,3 +108,22 @@ The future website/output app should consume exported public data from the
 pipeline. It can live in this repo first, for example under `apps/web/`, and move
 to a separate repo later if deploy cadence, ownership, or dependency boundaries
 make that worthwhile.
+
+## The Philosophy Primer
+
+The static viewer in `apps/web/` shows generated Philosophy Primer entries from the
+pipeline outputs. From the repository root, serve the project and open the app:
+
+```bash
+python -m http.server 5173
+```
+
+Then visit `http://localhost:5173/apps/web/`.
+
+The viewer first looks for `data/public_export.json`, then falls back to local
+batch result JSONL files when they are present. No frontend install step is
+required. The home view is just search; results are title links to individual
+article pages. The Browse view lists all article names alphabetically. Search
+supports plain terms, exact phrases, exclusions such as `-Kant`, and field
+filters such as `title:logic`, `term:virtue`, `idea:freedom`, and
+`question:knowledge`.

@@ -346,19 +346,20 @@ def _write_chunk_file(output_dir: Path, stamp: str, chunk_index: int, lines: lis
 def _import_batch_results(input_path: Path, settings: Settings) -> int:
     repo = Repository(settings.database_url)
     imported = 0
-    for line in input_path.read_text(encoding="utf-8").splitlines():
+    skipped = 0
+    for line_number, line in enumerate(input_path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         envelope = json.loads(line)
-        if envelope.get("error"):
+        payload = _payload_from_batch_envelope(envelope, input_path, line_number)
+        if payload is None:
+            skipped += 1
             continue
-        body = envelope["response"]["body"]
-        content = body["choices"][0]["message"]["content"]
-        payload = json.loads(content)
         slug = payload.get("sep_slug", "")
         source_text = _cached_source_text(settings.raw_cache_dir, slug, str(payload.get("sep_url", "")))
         qa = validate_generated_payload(payload, source_text=source_text)
         if not qa.article:
+            skipped += 1
             continue
         article_id = _lookup_article_id(repo, qa.article.sep_slug)
         repo.insert_generated_article(
@@ -370,7 +371,51 @@ def _import_batch_results(input_path: Path, settings: Settings) -> int:
             qa.notes,
         )
         imported += 1
+    if skipped:
+        print(f"Skipped {skipped} batch result(s) from {input_path}; see messages above for details.")
     return imported
+
+
+def _payload_from_batch_envelope(envelope: dict, input_path: Path, line_number: int) -> dict | None:
+    custom_id = str(envelope.get("custom_id", "<unknown>"))
+    location = f"{input_path}:{line_number}"
+    if envelope.get("error"):
+        print(f"Skipping {custom_id} at {location}: request error: {envelope['error']}")
+        return None
+
+    response = envelope.get("response") or {}
+    status_code = response.get("status_code")
+    body = response.get("body") or {}
+    if status_code and int(status_code) >= 400:
+        print(f"Skipping {custom_id} at {location}: response status {status_code}: {body.get('error', body)}")
+        return None
+
+    choices = body.get("choices") or []
+    if not choices:
+        print(f"Skipping {custom_id} at {location}: response body did not include choices.")
+        return None
+
+    choice = choices[0] or {}
+    message = choice.get("message") or {}
+    refusal = message.get("refusal")
+    if refusal:
+        print(f"Skipping {custom_id} at {location}: model refusal: {refusal}")
+        return None
+
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        print(
+            f"Skipping {custom_id} at {location}: empty model content "
+            f"(finish_reason={choice.get('finish_reason')!r}, usage={body.get('usage')!r})."
+        )
+        return None
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        preview = content[:240].replace("\n", "\\n")
+        print(f"Skipping {custom_id} at {location}: model content was not JSON ({exc}); preview={preview!r}.")
+        return None
 
 
 def _lookup_article_id(repo: Repository, slug: str) -> int:
