@@ -109,9 +109,9 @@ pipeline. It can live in this repo first, for example under `apps/web/`, and mov
 to a separate repo later if deploy cadence, ownership, or dependency boundaries
 make that worthwhile.
 
-## The Philosophy Primer
+## The Condensed Encyclopedia of Philosophy
 
-The static viewer in `apps/web/` shows generated Philosophy Primer entries from the
+The static viewer in `apps/web/` shows generated Condensed Encyclopedia of Philosophy entries from the
 pipeline outputs. From the repository root, serve the project and open the app:
 
 ```bash
@@ -120,10 +120,17 @@ python -m http.server 5173
 
 Then visit `http://localhost:5173/apps/web/`.
 
-The viewer first looks for `data/public_export.json`, then falls back to local
-batch result JSONL files when they are present. No frontend install step is
-required. The home view is just search; results are title links to individual
-article pages. The Browse view lists all article names alphabetically. Search
-supports plain terms, exact phrases, exclusions such as `-Kant`, and field
-filters such as `title:logic`, `term:virtue`, `idea:freedom`, and
-`question:knowledge`.
+The viewer first looks for `data/public_export.json`. If that export exists and
+contains articles, it is treated as authoritative. Local batch result JSONL files
+are only used as a fallback when the public export is missing or empty. No
+frontend install step is required. The home view is just search; results are
+title links to individual article pages. The Browse view lists all article names
+alphabetically. Search supports plain terms, exact phrases, exclusions such as
+`-Kant`, and field filters such as `title:logic`, `term:virtue`, `idea:freedom`,
+and `question:knowledge`.
+
+`export-public` is currently relaxed for local review: it includes generated
+articles and summaries with `passed`, `needs_manual_review`, and `failed`
+QA statuses. Each exported summary includes `qa_status`, so failed entries can
+still be audited later. Restore the stricter SQL gate in
+`Repository.public_export()` before treating the export as final public data.

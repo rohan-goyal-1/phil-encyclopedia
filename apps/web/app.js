@@ -42,7 +42,7 @@ initTheme();
 init();
 
 async function init() {
-  state.entries = (await loadEntries()).sort((a, b) => a.title.localeCompare(b.title));
+  state.entries = (await loadEntries()).sort(compareEntriesByTitle);
   entryCount.textContent = entryCountText(state.entries.length);
   bindEvents();
   renderRoute();
@@ -172,21 +172,29 @@ function updateClearButton() {
 }
 
 async function loadEntries() {
-  const loaded = [];
+  const [publicExport, ...fallbackCandidates] = DATA_CANDIDATES;
+  const publicEntries = await loadCandidateEntries(publicExport);
+  if (publicEntries.length) return dedupeEntries(publicEntries);
 
-  for (const candidate of DATA_CANDIDATES) {
-    try {
-      const response = await fetch(candidate.path, { cache: "no-store" });
-      if (!response.ok) continue;
-      const text = await response.text();
-      const parsed = candidate.type === "jsonl" ? parseJsonl(text) : [JSON.parse(text)];
-      loaded.push(...parsed.flatMap(normalizePayload));
-    } catch (error) {
-      console.warn(`Could not load ${candidate.path}`, error);
-    }
+  const loaded = [];
+  for (const candidate of fallbackCandidates) {
+    loaded.push(...(await loadCandidateEntries(candidate)));
   }
 
   return dedupeEntries(loaded);
+}
+
+async function loadCandidateEntries(candidate) {
+  try {
+    const response = await fetch(candidate.path, { cache: "no-store" });
+    if (!response.ok) return [];
+    const text = await response.text();
+    const parsed = candidate.type === "jsonl" ? parseJsonl(text) : [JSON.parse(text)];
+    return parsed.flatMap(normalizePayload);
+  } catch (error) {
+    console.warn(`Could not load ${candidate.path}`, error);
+    return [];
+  }
 }
 
 function parseJsonl(text) {
@@ -346,7 +354,7 @@ function updateSearchResults() {
   state.results = state.entries
     .map((entry) => scoreEntry(entry, parsedQuery))
     .filter((result) => result.score > 0)
-    .sort((a, b) => b.score - a.score || a.entry.title.localeCompare(b.entry.title));
+    .sort((a, b) => b.score - a.score || compareEntriesByTitle(a.entry, b.entry));
 
   if (parseRoute().name !== "home") {
     history.replaceState(null, "", "#/");
@@ -481,6 +489,7 @@ function renderBrowse() {
     </header>
     <div class="browse">
       ${Object.entries(groups)
+        .sort(([a], [b]) => compareGroupLetters(a, b))
         .map(
           ([letter, entries]) => `
             <section class="alpha-group">
@@ -504,12 +513,40 @@ function renderBrowse() {
 }
 
 function groupByLetter(entries) {
-  return entries.reduce((groups, entry) => {
-    const letter = (entry.title.match(/[A-Za-z0-9]/)?.[0] || "#").toUpperCase();
-    groups[letter] = groups[letter] || [];
-    groups[letter].push(entry);
-    return groups;
+  const groups = entries.reduce((grouped, entry) => {
+    const letter = browseLetter(entry.title);
+    grouped[letter] = grouped[letter] || [];
+    grouped[letter].push(entry);
+    return grouped;
   }, {});
+
+  Object.values(groups).forEach((group) => group.sort(compareEntriesByTitle));
+  return groups;
+}
+
+function browseLetter(title) {
+  const normalized = normalizeForBrowse(title);
+  return normalized.match(/[A-Z0-9]/)?.[0] || "#";
+}
+
+function normalizeForBrowse(value = "") {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
+
+function compareEntriesByTitle(a, b) {
+  return normalizeForBrowse(a.title).localeCompare(normalizeForBrowse(b.title), "en", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function compareGroupLetters(a, b) {
+  const aRank = /^[0-9]$/.test(a) ? 0 : /^[A-Z]$/.test(a) ? 1 : 2;
+  const bRank = /^[0-9]$/.test(b) ? 0 : /^[A-Z]$/.test(b) ? 1 : 2;
+  return aRank - bRank || a.localeCompare(b, "en", { numeric: true });
 }
 
 function buildArticleBlocks(summary, queryTokens) {

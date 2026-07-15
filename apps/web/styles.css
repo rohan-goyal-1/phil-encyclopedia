@@ -215,10 +215,10 @@ button {
 .search-heading {
   margin: 0 0 10px;
   font-family: "Times New Roman", Times, serif;
-  font-size: clamp(2.2rem, 5.5vw, 3.25rem);
+  font-size: clamp(1.45rem, 3.8vw, 2.35rem);
   font-weight: 400;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 
 .search-sub {

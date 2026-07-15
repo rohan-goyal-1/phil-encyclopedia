@@ -115,18 +115,18 @@ class Repository:
                     (
                         article_id,
                         level,
-                        summary.summary,
-                        summary.key_ideas,
-                        json.dumps([term.model_dump() for term in summary.important_terms]),
-                        summary.example,
-                        summary.why_it_matters,
-                        summary.questions_to_think_about,
+                        _strip_nul(summary.summary),
+                        _strip_nul(summary.key_ideas),
+                        json.dumps(_strip_nul([term.model_dump() for term in summary.important_terms])),
+                        _strip_nul(summary.example),
+                        _strip_nul(summary.why_it_matters),
+                        _strip_nul(summary.questions_to_think_about),
                         summary.reading_time_minutes,
                         model,
                         prompt_version,
                         generated_at,
                         qa_status,
-                        qa_notes,
+                        _strip_nul(qa_notes),
                     ),
                 )
             conn.execute(
@@ -152,11 +152,15 @@ class Repository:
                     'reading_time_minutes', s.reading_time_minutes,
                     'model', s.model,
                     'prompt_version', s.prompt_version,
-                    'generated_at', s.generated_at
+                    'generated_at', s.generated_at,
+                    'qa_status', s.qa_status
                   ) ORDER BY s.level) AS summaries
                 FROM articles a
                 JOIN article_summaries s ON s.article_id = a.id
-                WHERE a.status = 'published' AND s.qa_status = 'passed'
+                -- Strict public gate to restore after review:
+                -- WHERE a.status = 'published' AND s.qa_status = 'passed'
+                WHERE a.status IN ('generated', 'needs_review', 'published')
+                  AND s.qa_status IN ('passed', 'needs_manual_review', 'failed')
                 GROUP BY a.id
                 ORDER BY a.title
                 """
@@ -177,3 +181,15 @@ class Repository:
                 (model, prompt_version),
             ).fetchall()
             return {str(row["sep_slug"]) for row in rows}
+
+
+def _strip_nul(value):
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_strip_nul(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_strip_nul(item) for item in value)
+    if isinstance(value, dict):
+        return {_strip_nul(key): _strip_nul(item) for key, item in value.items()}
+    return value
